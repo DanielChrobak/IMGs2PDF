@@ -1,1 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image to PDF Converter</title>
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .preview-image {
+            max-width: 200px;
+            max-height: 200px;
+            border: 1px solid #ddd;
+            padding: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #dropZone {
+            border: 2px dashed #ccc;
+            border-radius: 20px;
+            width: 100%;
+            padding: 50px;
+            text-align: center;
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #777;
+        }
+        #dropZone.dragover {
+            background-color: #e9e9e9;
+            border-color: #999;
+        }
+        .preview-item {
+            position: relative;
+            display: inline-block;
+            margin: 5px;
+        }
+        .remove-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: red;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: none;
+        }
+        .preview-item:hover .remove-btn {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Image to PDF Converter</h1>
+        <div id="dropZone">Drag and drop images here or click to select files</div>
+        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+        <button onclick="convertToPdf()">Convert to PDF</button>
+        <div class="preview-container" id="previewContainer"></div>
+    </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        const { jsPDF } = window.jspdf;
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const previewContainer = document.getElementById('previewContainer');
+        let selectedFiles = [];
+
+        function handleFiles(newFiles) {
+            selectedFiles = [...selectedFiles, ...Array.from(newFiles)];
+            updateFileInput();
+            renderPreviews();
+        }
+
+        function updateFileInput() {
+            const dataTransfer = new DataTransfer();
+            selectedFiles.forEach(file => dataTransfer.items.add(file));
+            fileInput.files = dataTransfer.files;
+        }
+
+        function renderPreviews() {
+            previewContainer.innerHTML = '';
+            selectedFiles.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const item = document.createElement('div');
+                    item.className = 'preview-item';
+                    
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = 'preview-image';
+                    
+                    const btn = document.createElement('button');
+                    btn.className = 'remove-btn';
+                    btn.textContent = '×';
+                    btn.onclick = () => removeFile(index);
+                    
+                    item.appendChild(img);
+                    item.appendChild(btn);
+                    previewContainer.appendChild(item);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function removeFile(index) {
+            selectedFiles = selectedFiles.filter((_, i) => i !== index);
+            updateFileInput();
+            renderPreviews();
+        }
+
+        fileInput.addEventListener('change', function(e) {
+            handleFiles(e.target.files);
+        });
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        async function convertToPdf() {
+            if (selectedFiles.length === 0) {
+                alert('Please select at least one image');
+                return;
+            }
+
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                const img = await loadImage(file);
+                
+                const imgWidth = img.naturalWidth;
+                const imgHeight = img.naturalHeight;
+                const aspectRatio = imgHeight / imgWidth;
+                
+                let targetWidth = pageWidth - 20;
+                let targetHeight = targetWidth * aspectRatio;
+
+                if (targetHeight > pageHeight - 20) {
+                    targetHeight = pageHeight - 20;
+                    targetWidth = targetHeight / aspectRatio;
+                }
+
+                const x = (pageWidth - targetWidth) / 2;
+                const y = (pageHeight - targetHeight) / 2;
+
+                if (i > 0) pdf.addPage();
+                pdf.addImage(img, 'JPEG', x, y, targetWidth, targetHeight);
+            }
+
+            pdf.save('converted.pdf');
+        }
+
+        function loadImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+    </script>
+</body>
+</html>
